@@ -1,0 +1,175 @@
+import numpy as np
+import scipy.stats as stats
+
+def compute_z_H(x, Y):
+    """
+    Compute the measurement vector z and the Jacobian matrix H.
+
+    Args:
+    - x (array): State vector [theta1, V1, theta2, V2, ..., theta9, V9]
+    - Y (array): Admittance matrix
+
+    Returns:
+    - z (array): Measurement vector
+    - H (array): Jacobian matrix
+    """
+    num_buses = len(x) // 2
+    z_length = 2 * num_buses + 2 * (num_buses * (num_buses - 1)) // 2
+    z = np.zeros(z_length)
+    H = np.zeros((z_length, len(x)))
+
+    for i in range(num_buses):
+        theta_i = x[2*i]
+        V_i = x[2*i + 1]
+
+        # Power injections at each bus
+        P_i = V_i ** 2 * Y[i, i].real - np.sum([V_i * V_j * (Y[i, j].real * np.cos(theta_i - x[2*j]) + Y[i, j].imag * np.sin(theta_i - x[2*j])) for j in range(num_buses)])
+        Q_i = -V_i ** 2 * Y[i, i].imag - np.sum([V_i * V_j * (Y[i, j].real * np.sin(theta_i - x[2*j]) - Y[i, j].imag * np.cos(theta_i - x[2*j])) for j in range(num_buses)])
+
+        z[2*i] = P_i
+        z[2*i + 1] = Q_i
+
+        # Compute elements of the Jacobian matrix
+        for j in range(num_buses):
+            if i == j:
+                continue
+                
+            theta_j = x[2*j]
+            V_j = x[2*j + 1]
+
+            G_ij = Y[i, j].real
+            B_ij = Y[i, j].imag
+
+            # Derivatives with respect to theta_i
+            dP_dtheta_i = -2 * V_i * V_j * (G_ij * np.sin(theta_i - theta_j) + B_ij * np.cos(theta_i - theta_j))
+            dQ_dtheta_i = -2 * V_i * V_j * (G_ij * np.cos(theta_i - theta_j) - B_ij * np.sin(theta_i - theta_j))
+
+            # Derivatives with respect to V_i
+            dP_dV_i = 2 * V_i * G_ij * np.cos(theta_i - theta_j) - np.sum([V_j * (G_ij * np.cos(theta_i - theta_j) + B_ij * np.sin(theta_i - theta_j)) for j in range(num_buses) if i != j])
+            dQ_dV_i = 2 * V_i * G_ij * np.sin(theta_i - theta_j) - np.sum([V_j * (G_ij * np.sin(theta_i - theta_j) - B_ij * np.cos(theta_i - theta_j)) for j in range(num_buses) if i != j])
+
+            # Assigning derivatives to the Jacobian matrix
+            H[2*i, 2*j] = dP_dtheta_i
+            H[2*i, 2*j + 1] = dP_dV_i
+            H[2*i + 1, 2*j] = dQ_dtheta_i
+            H[2*i + 1, 2*j + 1] = dQ_dV_i
+
+    k = 2 * num_buses
+    for i in range(num_buses):
+        for j in range(i+1, num_buses):
+            theta_i = x[2*i]
+            V_i = x[2*i + 1]
+            theta_j = x[2*j]
+            V_j = x[2*j + 1]
+
+            # Power flows between buses i and j
+            P_ij = V_i * (Y[i, j].real * np.cos(theta_i - theta_j) + Y[i, j].imag * np.sin(theta_i - theta_j))
+            Q_ij = -V_i * (Y[i, j].real * np.sin(theta_i - theta_j) - Y[i, j].imag * np.cos(theta_i - theta_j))
+
+            z[k] = P_ij
+            z[k + 1] = Q_ij
+
+            # Derivatives with respect to theta_i
+            dP_ij_dtheta_i = -V_i * V_j * (Y[i, j].real * np.sin(theta_i - theta_j) + Y[i, j].imag * np.cos(theta_i - theta_j))
+            dQ_ij_dtheta_i = -V_i * V_j * (Y[i, j].real * np.cos(theta_i - theta_j) - Y[i, j].imag * np.sin(theta_i - theta_j))
+
+            # Derivatives with respect to V_i
+            dP_ij_dV_i = (Y[i, j].real * np.cos(theta_i - theta_j) + Y[i, j].imag * np.sin(theta_i - theta_j))
+            dQ_ij_dV_i = -(Y[i, j].real * np.sin(theta_i - theta_j) - Y[i, j].imag * np.cos(theta_i - theta_j))
+
+            # Derivatives with respect to theta_j
+            dP_ij_dtheta_j = V_i * V_j * (Y[i, j].real * np.sin(theta_i - theta_j) + Y[i, j].imag * np.cos(theta_i - theta_j))
+            dQ_ij_dtheta_j = V_i * V_j * (Y[i, j].real * np.cos(theta_i - theta_j) - Y[i, j].imag * np.sin(theta_i - theta_j))
+
+            # Derivatives with respect to V_j
+            dP_ij_dV_j = - (Y[i, j].real * np.cos(theta_i - theta_j) + Y[i, j].imag * np.sin(theta_i - theta_j))
+            dQ_ij_dV_j = (Y[i, j].real * np.sin(theta_i - theta_j) - Y[i, j].imag * np.cos(theta_i - theta_j))
+
+            # Assigning derivatives to the Jacobian matrix
+            H[k, 2*i] = dP_ij_dtheta_i
+            H[k, 2*i + 1] = dP_ij_dV_i
+            H[k, 2*j] = dP_ij_dtheta_j
+            H[k, 2*j + 1] = dP_ij_dV_j
+
+            H[k + 1, 2*i] = dQ_ij_dtheta_i
+            H[k + 1, 2*i + 1] = dQ_ij_dV_i
+            H[k + 1, 2*j] = dQ_ij_dtheta_j
+            H[k + 1, 2*j + 1] = dQ_ij_dV_j
+
+            k += 2
+
+    return z, H
+
+# Example usage:
+# Define state vector x and admittance matrix Y
+x = np.array([0.1, 1.0, 0.2, 1.0, 0.3, 1.0, 0.4, 1.0, 0.5, 1.0])  # [theta1, V1, theta2, V2, ..., theta9, V9]
+Y = np.array([[5, -2j, -1j, 0, 0, 0, 0, 0, 0],
+              [-2j, 6, -2j, 0, 0, 0, 0, 0, 0],
+              [-1j, -2j, 5, -2j, 0, 0, 0, 0, 0],
+              [0, 0, -2j, 6, -2j, -1j, 0, 0, 0],
+              [0, 0, 0, -2j, 6, 0, 0, -2j, -2j],
+              [0, 0, 0, -1j, 0, 4, -2j, 0, -1j],
+              [0, 0, 0, 0, 0, -2j, 5, -2j, 0],
+              [0, 0, 0, 0, -2j, 0, -2j, 6, -2j],
+              [0, 0, 0, 0, -2j, -1j, 0, -2j, 5]])  # Admittance matrix
+
+# Compute measurement vector z and Jacobian matrix H
+z, H = compute_z_H(x, Y)
+print("Measurement vector z:", z)
+print("Jacobian matrix H:")
+print(H)
+
+=======================================================================
+# Define the diagonal elements for the weight matrix W
+W_diag = np.array([0.0004, 0.0016] * (len(z) // 2))
+
+# Construct the weight matrix W
+W = np.diag(W_diag)
+
+# Compute the pseudo-inverse of H
+H_pseudo_inv = np.linalg.pinv(H)
+
+# Compute x_hat
+x_hat = np.linalg.inv(H.T @ np.linalg.inv(W) @ H) @ H.T @ np.linalg.inv(W) @ z
+
+print("Estimated state vector x_hat:", x_hat)
+
+==========================================================================
+
+gamma = np.sqrt(np.linalg.inv(W)) @ (z - H @ x_hat)
+
+print("Residual vector gamma:", gamma)
+
+===========================================================================
+gamma_norm = np.linalg.norm(gamma)
+
+print("Euclidean norm of gamma:", gamma_norm)
+
+===========================================================================
+
+# Given significance level (alpha)
+alpha = 0.05
+
+# Degrees of freedom (equal to the number of measurements)
+degrees_of_freedom = len(gamma)
+
+# Find the threshold tau
+tau = stats.chi2.ppf(1 - alpha, degrees_of_freedom)
+
+print("Threshold tau for significance level alpha =", alpha, ":", tau)
+
+==========================================================================
+
+# Compute H^T W^-1 H
+HT_W_inv_H = H.T @ np.linalg.inv(W) @ H
+
+# Compute the inverse of H^T W^-1 H
+inv_HT_W_inv_H = np.linalg.inv(HT_W_inv_H)
+
+# Compute Omega
+I = np.eye(len(H))
+Omega = W_inv @ (I - H @ inv_HT_W_inv_H @ H.T @ np.linalg.inv(W))
+
+print("Matrix Omega:")
+print(Omega)
+
