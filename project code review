@@ -23,8 +23,8 @@ def compute_z_H(x, Y):
         V_i = x[2*i + 1]
 
         # Power injections at each bus
-        P_i = V_i ** 2 * Y[i, i].real - np.sum([V_i * V_j * (Y[i, j].real * np.cos(theta_i - x[2*j]) + Y[i, j].imag * np.sin(theta_i - x[2*j])) for j in range(num_buses)])
-        Q_i = -V_i ** 2 * Y[i, i].imag - np.sum([V_i * V_j * (Y[i, j].real * np.sin(theta_i - x[2*j]) - Y[i, j].imag * np.cos(theta_i - x[2*j])) for j in range(num_buses)])
+        P_i = V_i ** 2 * Y[i, i].real - np.sum([V_i * x[2*j + 1] * (Y[i, j].real * np.cos(theta_i - x[2*j]) + Y[i, j].imag * np.sin(theta_i - x[2*j])) for j in range(num_buses)])
+        Q_i = -V_i ** 2 * Y[i, i].imag - np.sum([V_i * x[2*j + 1] * (Y[i, j].real * np.sin(theta_i - x[2*j]) - Y[i, j].imag * np.cos(theta_i - x[2*j])) for j in range(num_buses)])
 
         z[2*i] = P_i
         z[2*i + 1] = Q_i
@@ -33,7 +33,7 @@ def compute_z_H(x, Y):
         for j in range(num_buses):
             if i == j:
                 continue
-                
+
             theta_j = x[2*j]
             V_j = x[2*j + 1]
 
@@ -119,7 +119,9 @@ print("Measurement vector z:", z)
 print("Jacobian matrix H:")
 print(H)
 
-=======================================================================
+
+#=====================================================
+
 # Define the diagonal elements for the weight matrix W
 W_diag = np.array([0.0004, 0.0016] * (len(z) // 2))
 
@@ -134,18 +136,18 @@ x_hat = np.linalg.inv(H.T @ np.linalg.inv(W) @ H) @ H.T @ np.linalg.inv(W) @ z
 
 print("Estimated state vector x_hat:", x_hat)
 
-==========================================================================
+#=====================================================
 
 gamma = np.sqrt(np.linalg.inv(W)) @ (z - H @ x_hat)
 
 print("Residual vector gamma:", gamma)
 
-===========================================================================
+
 gamma_norm = np.linalg.norm(gamma)
 
 print("Euclidean norm of gamma:", gamma_norm)
 
-===========================================================================
+#=======================================================
 
 # Given significance level (alpha)
 alpha = 0.05
@@ -158,7 +160,8 @@ tau = stats.chi2.ppf(1 - alpha, degrees_of_freedom)
 
 print("Threshold tau for significance level alpha =", alpha, ":", tau)
 
-==========================================================================
+#=======================================================
+
 
 # Compute H^T W^-1 H
 HT_W_inv_H = H.T @ np.linalg.inv(W) @ H
@@ -168,8 +171,8 @@ inv_HT_W_inv_H = np.linalg.inv(HT_W_inv_H)
 
 # Compute Omega
 I = np.eye(len(H))
+W_inv = np.linalg.inv(W)
 Omega = W_inv @ (I - H @ inv_HT_W_inv_H @ H.T @ np.linalg.inv(W))
 
 print("Matrix Omega:")
 print(Omega)
-
