@@ -176,3 +176,102 @@ Omega = W_inv @ (I - H @ inv_HT_W_inv_H @ H.T @ np.linalg.inv(W))
 
 print("Matrix Omega:")
 print(Omega)
+
+#=======================================================
+
+# List to store column matrices
+wi = []
+
+# Extracting and storing column matrices
+for i in range(Omega.shape[1]):
+    wi.append(Omega[:, i])
+
+# Printing column matrices
+for i, column_matrix in enumerate(wi):
+    print(f"Matrix w_{i+1}:")
+    print(column_matrix)
+
+#=======================================================
+
+# List to store w_i0 and w_i1 matrices
+w_i0 = []
+w_i1 = []
+
+# Divide each matrix into w_i0 and w_i1
+for i, w in enumerate(wi):
+    w_mean = np.mean(w)
+    w_0 = w_mean * np.ones_like(w)
+    w_i0.append(w_0)
+    w_i1.append(w - w_0)
+
+# Printing w_i0 and w_i1 matrices
+for i, (w0, w1) in enumerate(zip(w_i0, w_i1)):
+    print(f"Matrix w_{i+1}_0 (mean):")
+    print(w0)
+    print(f"Matrix w_{i+1}_1 (deviation from mean):")
+    print(w1)
+
+#=======================================================
+
+from pypaillier import encrypt
+
+# Function to encrypt a matrix using Paillier encryption
+def encrypt_matrix(matrix, public_key):
+    encrypted_matrix = []
+    for row in matrix:
+        encrypted_row = [encrypt(public_key, val) for val in row]
+        encrypted_matrix.append(encrypted_row)
+    return encrypted_matrix
+
+# Public and private key generation (example)
+from pypaillier import generate_paillier_keypair
+
+public_key, private_key = generate_paillier_keypair()
+
+# Encrypting each element of w_i0 and w_i1
+encrypted_w_i0 = encrypt_matrix(w_i0, public_key)
+encrypted_w_i1 = encrypt_matrix(w_i1, public_key)
+
+# Printing encrypted matrices (example)
+for i, (encrypted_w0, encrypted_w1) in enumerate(zip(encrypted_w_i0, encrypted_w_i1)):
+    print(f"Encrypted matrix w_{i+1}_0 (mean):")
+    print(encrypted_w0)
+    print(f"Encrypted matrix w_{i+1}_1 (deviation from mean):")
+    print(encrypted_w1)
+
+#=======================================================
+
+from Crypto.Util.number import getPrime, getRandomRange
+from phe import paillier
+import numpy as np
+
+# Generate Paillier public and private keys
+public_key, private_key = paillier.generate_paillier_keypair()
+
+# Function to encrypt each element of the matrix
+def encrypt_matrix(Z):
+    encrypted_matrix = []
+    for row in Z:
+        encrypted_row = []
+        for element in row:
+            encrypted_element = public_key.encrypt(element)
+            encrypted_row.append(encrypted_element)
+        encrypted_matrix.append(encrypted_row)
+    return encrypted_matrix
+
+
+# Encrypt the matrix
+encrypted_Z = encrypt_matrix(z)
+
+# Decrypt the encrypted matrix (just for demonstration, decryption should be done by the party holding the private key)
+decrypted_Z = [[private_key.decrypt(encrypted_element) for encrypted_element in row] for row in encrypted_Z]
+
+print("Original Matrix Z:")
+print(z)
+print("\nEncrypted Matrix Z:")
+print(encrypted_Z)
+print("\nDecrypted Matrix Z:")
+print(decrypted_Z)
+
+
+
